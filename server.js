@@ -2,15 +2,18 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 
-const patientSchema = new mongoose.Schema({
-  heartRate: Number,
-  spo2: Number,
-  ecg: Number
-}, {
-  timestamps: true // ⚠️ Needed for `createdAt`
-});
+const patientSchema = new mongoose.Schema(
+  {
+    heartRate: Number,
+    spo2: Number,
+    ecg: Number,
+  },
+  {
+    timestamps: true, // ⚠️ Needed for `createdAt`
+  }
+);
 
-const Patient = mongoose.model('Patient', patientSchema);
+const Patient = mongoose.model("Patient", patientSchema);
 
 const app = express();
 const PORT = 4000;
@@ -22,7 +25,9 @@ app.use(express.json());
 // Function to start server after DB connects
 async function startServer() {
   try {
-    await mongoose.connect("mongodb+srv://cvdproject:cvd123456@cvd-cluster.arfmy9f.mongodb.net/CVD_DB?retryWrites=true&w=majority&appName=CVD-CLUSTER");
+    await mongoose.connect(
+      "mongodb+srv://cvdproject:cvd123456@cvd-cluster.arfmy9f.mongodb.net/CVD_DB?retryWrites=true&w=majority&appName=CVD-CLUSTER"
+    );
 
     console.log("✅ Connected to MongoDB!");
 
@@ -33,7 +38,11 @@ async function startServer() {
 
         const { heartRate, spo2, ecg } = req.body;
 
-        if (heartRate === undefined || spo2 === undefined || ecg === undefined) {
+        if (
+          heartRate === undefined ||
+          spo2 === undefined ||
+          ecg === undefined
+        ) {
           console.log("❌ Missing Data Fields");
           return res.status(400).send("❌ Missing Data Fields");
         }
@@ -42,7 +51,9 @@ async function startServer() {
         const patient = await Patient.findOne().sort({ createdAt: -1 }).exec();
 
         if (!patient) {
-          return res.status(404).json({ error: "No patient data found to update." });
+          return res
+            .status(404)
+            .json({ error: "No patient data found to update." });
         }
 
         patient.heartRate = heartRate;
@@ -52,9 +63,24 @@ async function startServer() {
         await patient.save();
         console.log("✅ Data successfully stored in MongoDB!");
         res.status(200).send("✅ Data saved to MongoDB");
-
       } catch (error) {
         console.error("❌ Error saving data:", error);
+        res.status(500).send("❌ Server Error");
+      }
+    });
+
+    app.get("/data", async (req, res) => {
+      try {
+        const patient = await Patient.findOne().sort({ createdAt: -1 }).exec();
+
+        if (!patient) {
+          return res.status(404).send("❌ No patient data found.");
+        }
+
+        const dataString = `Heart Rate: ${patient.heartRate} BPM | SpO2: ${patient.spo2} % | ECG Signal: ${patient.ecg}`;
+        res.status(200).send(dataString);
+      } catch (error) {
+        console.error("❌ Error fetching data:", error);
         res.status(500).send("❌ Server Error");
       }
     });
@@ -63,7 +89,6 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
     });
-
   } catch (error) {
     console.error("❌ Failed to connect to MongoDB:", error.message);
     process.exit(1);

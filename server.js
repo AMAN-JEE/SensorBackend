@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import ControlFlag from "./models/controlFlagModel.js";
 
 const patientSchema = new mongoose.Schema(
   {
@@ -20,7 +21,7 @@ const PORT = 4000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // required for POST body parsing
 
 // Function to start server after DB connects
 async function startServer() {
@@ -31,10 +32,10 @@ async function startServer() {
 
     console.log("✅ Connected to MongoDB!");
 
-    // Define route here
+    // POST /data → ESP sends sensor data
     app.post("/data", async (req, res) => {
       try {
-        console.log("📥 Received Request:", req.body);
+        console.log("📥 Received Sensor Data:", req.body);
 
         const { heartRate, spo2, ecg } = req.body;
 
@@ -69,6 +70,7 @@ async function startServer() {
       }
     });
 
+    // GET /data → for testing sensor data
     app.get("/data", async (req, res) => {
       try {
         const patient = await Patient.findOne().sort({ createdAt: -1 }).exec();
@@ -85,9 +87,49 @@ async function startServer() {
       }
     });
 
+    // GET /get-flag → ESP polls this
+    app.get("/get-flag", async (req, res) => {
+      try {
+        const flagDoc = await ControlFlag.findOne({ name: "sensorFlag" });
+
+        if (!flagDoc) {
+          console.log("⚠️ No flag found, returning default 0");
+          return res.status(200).json({ flag: 0 }); // Default 0 if not set
+        }
+
+        res.status(200).json({ flag: flagDoc.value });
+      } catch (error) {
+        console.error("❌ Error fetching flag:", error);
+        res.status(500).json({ error: "Server Error" });
+      }
+    });
+
+    // POST /set-flag → React calls this
+    app.post("/set-flag", async (req, res) => {
+      try {
+        const { value } = req.body;
+
+        if (typeof value !== "number" || (value !== 0 && value !== 1)) {
+          return res.status(400).json({ error: "Invalid flag value" });
+        }
+
+        const updatedFlag = await ControlFlag.findOneAndUpdate(
+          { name: "sensorFlag" },
+          { value: value },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ Sensor flag updated to: ${updatedFlag.value}`);
+        res.status(200).json({ status: "ok", flag: updatedFlag.value });
+      } catch (error) {
+        console.error("❌ Error updating flag:", error);
+        res.status(500).json({ error: "Server Error" });
+      }
+    });
+
     // Start Express server
     app.listen(PORT, () => {
-      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+      console.log(`🚀 Sensor Server is running on http://localhost:${PORT}`);
     });
   } catch (error) {
     console.error("❌ Failed to connect to MongoDB:", error.message);
